@@ -3,11 +3,33 @@
 // However, you must not change the surface API presented from this file,
 // and you should not need to change any other files in the project to complete the challenge
 
+import { useEffect, useState } from 'react';
+
 type UseCachingFetch = (url: string) => {
   isLoading: boolean;
   data: unknown;
   error: Error | null;
 };
+
+// Cached data
+
+interface ICachedData {
+  [key: string]: unknown;
+}
+
+let cachedData: ICachedData = {};
+
+const loadService = (url: string): Promise<unknown> =>
+  new Promise(async (resolve, reject) => {
+    try {
+      const res = await fetch(url);
+      const json = await res.json();
+      cachedData[url] = json;
+      resolve(json);
+    } catch (err: any) {
+      reject(err);
+    }
+  })
 
 /**
  * 1. Implement a caching fetch hook. The hook should return an object with the following properties:
@@ -28,12 +50,33 @@ type UseCachingFetch = (url: string) => {
  *
  */
 export const useCachingFetch: UseCachingFetch = (url) => {
+  const [data, setData] = useState<unknown>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const data = cachedData[url];
+    if (!!data) {
+      setData(data);
+      setIsLoading(false);
+    } else load();
+  }, []);
+
+  const load = async () => {
+    setIsLoading(true);
+    try {
+      const data = await loadService(url);
+      setData(cachedData[url] = data);
+    } catch (err: any) {
+      setError(new Error(err?.message || 'Something failed'))
+    }
+    setIsLoading(false);
+  }
+
   return {
-    data: null,
-    isLoading: false,
-    error: new Error(
-      'UseCachingFetch has not been implemented, please read the instructions in DevTask.md',
-    ),
+    data,
+    isLoading,
+    error
   };
 };
 
@@ -52,11 +95,15 @@ export const useCachingFetch: UseCachingFetch = (url) => {
  *
  */
 export const preloadCachingFetch = async (url: string): Promise<void> => {
-  throw new Error(
-    'preloadCachingFetch has not been implemented, please read the instructions in DevTask.md',
-  );
-};
-
+  return new Promise(async (resolve, reject) => {
+    try {
+      await loadService(url);
+      resolve();
+    } catch (err: any) {
+      reject(err);
+    }
+  })
+}
 /**
  * 3.1 Implement a serializeCache function that serializes the cache to a string.
  * 3.2 Implement an initializeCache function that initializes the cache from a serialized cache string.
@@ -73,8 +120,12 @@ export const preloadCachingFetch = async (url: string): Promise<void> => {
  * 4. This file passes a type-check.
  *
  */
-export const serializeCache = (): string => '';
+export const serializeCache = (): string => JSON.stringify(cachedData);
 
-export const initializeCache = (serializedCache: string): void => {};
+export const initializeCache = (serializedCache: string): void => {
+  cachedData = JSON.parse(serializedCache);
+};
 
-export const wipeCache = (): void => {};
+export const wipeCache = (): void => {
+  cachedData = {};
+}
